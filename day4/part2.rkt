@@ -1,0 +1,86 @@
+#lang racket
+(require test-engine/racket-tests)
+(require math)
+(require racket/list/grouping)
+(require math/number-theory)
+
+(define span-test-list '((11 12 13 14 15)
+                         (21 22 23 24 25)
+                         (31 32 33 34 35)
+                         (41 42 43 44 45)
+                         (51 52 53 54 55)))
+(check-expect (span '(1 2 3 4 5) 0) '(1 2 3))
+(check-expect (span '(1 2 3 4 5) 1) '(2 3 4))
+(check-expect (span '(1 2 3 4 5) 2) '(3 4 5))
+(define (span l x)
+  (take (list-tail l x) 3))
+(check-expect (span2 span-test-list 2 2) '((33 34 35) (43 44 45) (53 54 55)))
+(define (span2 l x y)
+  (map (lambda (s) (span s x)) (span l y)))
+
+(check-expect (add-empty-col '(1 2 3) 0) '(0 1 2 3 0))
+(define (add-empty-col l v)
+  `(,v ,@l ,v))
+
+(check-expect (add-borders '((1 2 3) (2 3 4))) '((0 0 0 0 0)
+                                                 (0 1 2 3 0)
+                                                 (0 2 3 4 0)
+                                                 (0 0 0 0 0)))
+(define (add-borders l)
+  (map (lambda (row) (add-empty-col row 0))
+       (add-empty-col l (make-list (length (car l)) 0))))
+
+(check-expect (parse '("..@" ".@.")) '((0 0 1) (0 1 0)))
+(define (parse lines)
+  (local ((define (ch->d ch) (cond [(equal? ch #\.) 0] [(equal? ch #\@) 1])))
+    (map (lambda (x) (map ch->d (string->list x))) lines)))
+
+(check-expect (span-point '((1 0 0) (1 1 1) (0 0 0))) 3)
+(check-expect (span-point '((1 0 0) (1 1 1) (0 0 1))) 4)
+(check-expect (span-point '((1 0 1) (1 1 1) (1 0 1))) 6)
+(check-expect (span-point '((0 0 0) (0 1 0) (0 0 0))) 1)
+(define (span-point s)
+  (* (max (+ (sum (car s))
+             (first (cadr s)) (last (cadr s))
+             (sum (caddr s)))
+          1)
+     (second (cadr s))))
+
+(check-expect
+ (count-neighbors (add-borders '((0 1 0 0)
+                                 (1 1 1 0)
+                                 (0 1 0 1)
+                                 (0 0 1 0))))
+ '((0 3 0 0)
+   (3 4 4 0)
+   (0 4 0 2)
+   (0 0 2 0)))
+(define (count-neighbors l)
+  (build-list (- (length l) 2)
+              (lambda (y)
+                (build-list (- (length (car l)) 2)
+                            (lambda (x) (span-point (span2 l x y)))))))
+
+(define (filter<4>0 l)
+  (filter (lambda (x) (and (> x 0) (< x 4))) l))
+
+(check-expect (normilize '((2 3 0) (1 1 2))) '((0 0 0) (0 0 0)))
+(check-expect (normilize '((2 4 5) (1 1 2))) '((0 1 1) (0 0 0)))
+(define (normilize lines)
+  (map (lambda (line) (map (lambda (x) (min 1 (max (- x 3) 0))) line)) lines))
+
+(define (remove-papers l)
+  (local ((define neighbors (count-neighbors (add-borders l)))
+          (define removed-count (sum (map length (map filter<4>0 neighbors)))))
+    (cond [(equal? 0 removed-count) 0]
+          [else (+ removed-count (remove-papers (normilize neighbors)))])))
+
+;(remove-papers '((0 1 0 0) (1 1 1 0) (0 1 0 1) (0 0 1 0)))
+
+(define (main lines)
+  (remove-papers  (parse lines)))
+
+;; -----------------------------
+(check-expect (main (file->lines "test.txt")) 43)
+(test)
+(main (file->lines "input.txt"))
